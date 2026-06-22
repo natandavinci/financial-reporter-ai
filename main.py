@@ -2,9 +2,10 @@ from typing import (TypedDict, Literal, Optional)
 from langgraph.graph import StateGraph, END
 from pydantic import BaseModel,Field
 from google import genai
+from google.genai import types
 import os
 from dotenv import load_dotenv
-
+import json
 load_dotenv()
 
 
@@ -62,28 +63,73 @@ def generate_draft(state:GraphState) -> dict:
 
     return {"draft": response.text, "status": "revisando","feedback": None }
 
-if __name__ == "__main__":
-     # Certifique-se de que o import do seu 'client' está correto no topo do arquivo
-    
-    # 1. Inicializa o cliente que você usou no nó (caso precise instanciar aqui para o teste)
-    # client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
-    # 2. Criamos um estado inicial simulando o GraphState do LangGraph
-    estado_inicial: GraphState = {
+def evaluate_feedback(state: GraphState) -> dict:
+    feedback_humano = state.get("feedback")
+
+    if not feedback_humano:
+        return{"status": "revisando"}
+
+    prompt = f"""
+    Você é um gerente de compliance financeiro. Sua tarefa é ler o feedback deixado por um analista sênior sobre um relatório e classificar a sua intenção de acordo com as seguintes regras:
+    
+    - Se o analista aprovou, disse que está bom, deu 'ok' ou aceitou o relatório -> classifique como "aceito".
+    - Se o analista criticou, pediu correções, apontou erros ou mandou refazer -> classifique como "rejeitado".
+    - Se o analista não tomou uma decisão clara ou pediu para analisar mais um pouco -> classifique como "revisando".
+    
+    Feedback do analista sênior:
+    "{feedback_humano}"
+    """
+
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=Status_classify,
+        )
+    )
+
+    dados_validados = json.loads(response.text)
+
+    return {"status": dados_validados["status"]}
+
+#TESTE
+#TESTE
+if __name__ == "__main__":
+    # 1. Primeira Execução: Criando o rascunho
+    estado: GraphState = {
         "nome": "Apple Inc.",
         "draft": None,
         "feedback": None,
         "status": None
     }
 
-    print("🚀 Testando o nó 'generate_draft' pela primeira vez...\n")
+    print("🚀 1. Gerando rascunho inicial...")
+    resultado_draft = generate_draft(estado)
     
-    # 3. Chamamos a função do nó diretamente, passando o nosso estado simulado
-    resultado_1 = generate_draft(estado_inicial)
-    
-    print("📊 STATUS RETORNADO:", resultado_1["status"])
-    print("\n📝 RASCUNHO GERADO:")
-    print("-" * 50)
-    print(resultado_1["draft"])
-    print("-" * 50)
+    # Atualizamos o nosso estado com o rascunho criado
+    estado["draft"] = resultado_draft["draft"]
+    print("📝 Rascunho gerado com sucesso!")
 
+    # 2. Simulando o Fator Humano: Você digitando uma crítica negativa
+    print("\n👥 2. Simulando feedback do Analista Sênior...")
+    estado["feedback"] = "O relatório está fraco. O Lobo de Wall Street esqueceu de citar os riscos regulatórios com inteligência artificial e a recomendação deveria ser COMPRAR."
+    
+    # 3. Rodando o nó de avaliação para ver se o SDK nativo classifica como 'rejeitado'
+    print("🧠 3. Classificando a intenção do feedback...")
+    resultado_avaliacao = evaluate_feedback(estado)
+    estado["status"] = resultado_avaliacao["status"]
+    
+    print("-" * 50)
+    print("📊 STATUS DA AVALIAÇÃO DA IA:", estado["status"]) # Deve printar: "rejeitado"
+    print("-" * 50)
+    
+    # 4. Rodando o nó de rascunho novamente para ver se ele corrige com base no feedback!
+    if estado["status"] == "rejeitado":
+        print("\n🔄 4. O relatório foi rejeitado! Rodando 'generate_draft' novamente com o feedback...")
+        resultado_correcao = generate_draft(estado)
+        print("\n📝 RELATÓRIO CORRIGIDO:")
+        print("-" * 50)
+        print(resultado_correcao["draft"])
+        print("-" * 50)
