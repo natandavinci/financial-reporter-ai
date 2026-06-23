@@ -95,7 +95,7 @@ def evaluate_feedback(state: GraphState) -> dict:
     return {"status": dados_validados["status"]}
 
 
-def human_aproval(state: GraphState) -> dict:
+def human_approval(state: GraphState) -> dict:
     print("\n" + "="*20 + " PAINEL DE REVISÃO HUMANA " + "="*20)
     print(f"Empresa analisada: {state['nome']}")
     print("\n📝 RASCUNHO DO RELATÓRIO ATUAL:")
@@ -107,7 +107,50 @@ def human_aproval(state: GraphState) -> dict:
 
     return {"feedback": feedback}
 
-#TESTE
+def router_condition(state: GraphState):
+
+    if state["feedback"] == "aceito":
+
+        return "finalizar"
+    else:
+
+        return "corrigir"
+
+
+# Creating graph
+
+graph = StateGraph(GraphState)
+
+
+# Nodes
+graph.add_node("generate_draft",
+               generate_draft)
+
+graph.add_node("evaluate_feedback",
+               evaluate_feedback)
+
+graph.add_node("human_approval",
+               human_approval)
+
+# Edges
+
+graph.set_entry_point("generate_draft")
+
+graph.add_edge("generate_draft", "human_approval")
+graph.add_edge("human_approval","evaluate_feedback")
+
+graph.add_conditional_edges("evaluate_feedback",
+                            router_condition,
+                            {
+                                "finalizar": END,
+                                "corrigir": "generate_draft"
+                            })
+
+
+
+
+
+
 #TESTE
 if __name__ == "__main__":
     # 1. Primeira Execução: Criando o rascunho
