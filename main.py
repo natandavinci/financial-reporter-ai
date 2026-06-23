@@ -1,5 +1,7 @@
 from typing import (TypedDict, Literal, Optional)
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
+from langchain_core.runnables.graph import MermaidDrawMethod
 from pydantic import BaseModel,Field
 from google import genai
 from google.genai import types
@@ -8,6 +10,7 @@ from dotenv import load_dotenv
 import json
 load_dotenv()
 
+memory = MemorySaver()
 
 client = genai.Client(
     api_key=os.getenv("GOOGLE_API_KEY")
@@ -146,45 +149,40 @@ graph.add_conditional_edges("evaluate_feedback",
                                 "corrigir": "generate_draft"
                             })
 
+# Compilando
 
-
+app = graph.compile(checkpointer=memory)
 
 
 
 #TESTE
 if __name__ == "__main__":
-    # 1. Primeira Execução: Criando o rascunho
-    estado: GraphState = {
+     
+    png_bytes = app.get_graph().draw_mermaid_png(
+                    draw_method=MermaidDrawMethod.API
+    )
+
+    with open("grafo_exemplo1.png", "wb") as f:
+        f.write(png_bytes)
+
+    # 1. Definimos a configuração com o ID da sessão do relatório
+    config = {"configurable": {"thread_id": "relatorio_apple_001"}}
+
+    # 2. Criamos o estado inicial com o nome da empresa
+    estado_inicial = {
         "nome": "Apple Inc.",
         "draft": None,
         "feedback": None,
         "status": None
     }
 
-    print("🚀 1. Gerando rascunho inicial...")
-    resultado_draft = generate_draft(estado)
+    print("🚀 Iniciando o Grafo do Gerador de Relatórios Financeiros...")
     
-    # Atualizamos o nosso estado com o rascunho criado
-    estado["draft"] = resultado_draft["draft"]
-    print("📝 Rascunho gerado com sucesso!")
-
-    # 2. Simulando o Fator Humano: Você digitando uma crítica negativa
-    print("\n👥 2. Simulando feedback do Analista Sênior...")
-    estado["feedback"] = human_aproval(estado)
-    # 3. Rodando o nó de avaliação para ver se o SDK nativo classifica como 'rejeitado'
-    print("🧠 3. Classificando a intenção do feedback...")
-    resultado_avaliacao = evaluate_feedback(estado)
-    estado["status"] = resultado_avaliacao["status"]
-    
-    print("-" * 50)
-    print("📊 STATUS DA AVALIAÇÃO DA IA:", estado["status"]) # Deve printar: "rejeitado"
-    print("-" * 50)
-    
-    # 4. Rodando o nó de rascunho novamente para ver se ele corrige com base no feedback!
-    if estado["status"] == "rejeitado":
-        print("\n🔄 4. O relatório foi rejeitado! Rodando 'generate_draft' novamente com o feedback...")
-        resultado_correcao = generate_draft(estado)
-        print("\n📝 RELATÓRIO CORRIGIDO:")
-        print("-" * 50)
-        print(resultado_correcao["draft"])
-        print("-" * 50)
+    # 3. Rodamos o grafo usando o .stream() para ver os nós executando em tempo real
+    # Passamos o estado apenas na primeira vez. O Grafo vai rodar, pedir seu feedback no terminal e decidir o rumo.
+    for evento in app.stream(estado_inicial, config, stream_mode="values"):
+        # Se o grafo terminou e o status for aceito, comemoramos
+        if evento.get("status") == "aceito":
+            print("\n✅ [SISTEMA]: Relatório Aprovado com Sucesso e Finalizado!")
+            print("=" * 60)
+            break
