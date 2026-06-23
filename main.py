@@ -94,6 +94,19 @@ def evaluate_feedback(state: GraphState) -> dict:
 
     return {"status": dados_validados["status"]}
 
+
+def human_aproval(state: GraphState) -> dict:
+    print("\n" + "="*20 + " PAINEL DE REVISÃO HUMANA " + "="*20)
+    print(f"Empresa analisada: {state['nome']}")
+    print("\n📝 RASCUNHO DO RELATÓRIO ATUAL:")
+    print("-" * 50)
+    print(state["draft"])
+    print("-" * 50)
+
+    feedback = input("\nDigite seu feedback (Aprovar, pedir correções ou alterações): ")
+
+    return {"feedback": feedback}
+
 #TESTE
 #TESTE
 if __name__ == "__main__":
@@ -114,8 +127,7 @@ if __name__ == "__main__":
 
     # 2. Simulando o Fator Humano: Você digitando uma crítica negativa
     print("\n👥 2. Simulando feedback do Analista Sênior...")
-    estado["feedback"] = "O relatório está fraco. O Lobo de Wall Street esqueceu de citar os riscos regulatórios com inteligência artificial e a recomendação deveria ser COMPRAR."
-    
+    estado["feedback"] = human_aproval(estado)
     # 3. Rodando o nó de avaliação para ver se o SDK nativo classifica como 'rejeitado'
     print("🧠 3. Classificando a intenção do feedback...")
     resultado_avaliacao = evaluate_feedback(estado)
